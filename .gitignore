@@ -1,0 +1,5 @@
+# OS / éditeurs
+.DS_Store
+Thumbs.db
+.vscode/
+*.log
