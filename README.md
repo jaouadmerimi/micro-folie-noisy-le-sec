@@ -6,7 +6,7 @@ Page web autonome (un seul fichier `index.html`, sans dépendance externe).
 
 ## Voir le site en ligne
 
-Publié via **GitHub Pages** : https://merimijaouad.github.io/micro-folie-noisy-le-sec/
+Publié via **GitHub Pages** : https://jaouadmerimi.github.io/micro-folie-noisy-le-sec/
 
 ## Développement local
 
