@@ -1,6 +1,6 @@
 # Micro-Folie Noisy-le-Sec
 
-Site public, agenda, réservations et administration de l’équipe. L’apparence du site d’origine est conservée. L’administration utilise des comptes individuels par email et mot de passe ; aucun compte ChatGPT n’est requis dans l’application.
+Site public, agenda, réservations et administration de l’équipe, publiés dans le dossier `docs/` sur GitHub Pages. L’apparence du site d’origine est conservée. L’administration utilise des comptes individuels par email et mot de passe et le serveur Vercel documenté dans `../micro-folie-server/README.md`.
 
 ## Utilisation
 
@@ -24,7 +24,15 @@ Chaque demande et chaque décision produit un email dans une file persistante. L
 
 Le service d’envoi peut accepter un email qui sera ensuite rejeté par le serveur destinataire. Le suivi présenté correspond à l’acceptation par Resend, pas à une preuve de lecture ou de livraison.
 
-## Technique
+## Technique et publication actuelle
+
+Lancer `npm run build:pages` pour régénérer `../docs/`, puis publier les modifications sur la branche `main`. GitHub Pages sert `main:/docs`. La configuration publique du serveur est `public/site-config.js`. Aucun secret ne doit être placé dans ce fichier ou dans `docs/`.
+
+Les composants React sont assemblés par Vite pour GitHub Pages. Les appels API sont envoyés au serveur Vercel, avec une session signée conservée dans sessionStorage pour l’administration. Le serveur utilise PostgreSQL Neon et conserve aussi les photos, y compris les brouillons privés. Les tests de migration et d’authentification sont dans `../micro-folie-server/tests/`.
+
+Les fichiers Vinext, Cloudflare et `.openai/` restants ci-dessous sont ceux de l’ancienne implémentation. Ils ne participent plus à la publication de production. Ne pas utiliser son ancien lien d’activation : le responsable dispose désormais du compte initial configuré sur Vercel.
+
+## Ancienne implémentation locale, conservée pour référence
 
 Vinext / React, Better Auth (email et mot de passe), Cloudflare D1 / SQLite, R2 pour les photos. Les API privées vérifient une session et les droits à chaque appel. Les nouvelles inscriptions sont accessibles seulement par les liens d’activation validés côté serveur. L’endpoint public de création de compte est bloqué. Les mutations vérifient l’origine et les limites de volume. Les liens de suivi utilisent un secret aléatoire de 256 bits, conservé uniquement sous forme de hash dans la table des réservations. Les liens sont passés dans le fragment URL, puis transmis dans le corps des requêtes, sans figurer dans les journaux d’URL.
 
