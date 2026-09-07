@@ -2104,8 +2104,9 @@
     padding: 20px;
     border-bottom: 1px solid var(--line);
   }
-  .mf-reservation-table td {
-    padding: 0;
+  .mf-reservation-table td,
+  .mf-reservation-table td:first-child {
+    padding: 0 !important;
     border: 0;
     min-width: 0;
   }
@@ -2113,7 +2114,7 @@
     grid-column: 1 / -1;
   }
   .mf-reservation-table td:nth-child(2) {
-    padding-left: 44px;
+    padding-left: 41px !important;
   }
   .mf-reservation-table td:nth-child(n + 3) {
     align-self: center;
