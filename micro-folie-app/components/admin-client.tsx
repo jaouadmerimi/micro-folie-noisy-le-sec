@@ -1,106 +1,160 @@
 'use client';
-import { useEffect, useState, type FormEvent } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { NativeSelect } from './ui/native-select';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from './ui/tabs';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from './ui/table';
-import {
+  LayoutDashboard,
   CalendarDays,
   Users,
   Newspaper,
-  Mail,
-  Plus,
-  LogOut,
+  Settings2,
+  ArrowRight,
   ArrowUpRight,
+  Plus,
+  Search,
+  ChevronRight,
+  LogOut,
   RefreshCw,
+  Check,
+  Clock3,
+  Mail,
   Printer,
+  Eye,
+  EyeOff,
+  X,
+  Menu,
+  Flower2,
+  FilePenLine,
 } from 'lucide-react';
-import { parisInput, parisToUTC, formatDate } from '../lib/dates';
-const labels: Record<string, string> = {
-  pending: 'À confirmer',
-  waitlist: 'Liste d’attente',
-  confirmed: 'Confirmée',
-  refused: 'Refusée',
-  cancelled: 'Annulée',
-  expired: 'Délai expiré',
-  draft: 'Brouillon',
-  published: 'Publié',
-  archived: 'Archivé',
-};
-import { api, apiFetch } from '../lib/http';
+import { api } from '../lib/http';
 import { sitePath } from '../lib/urls';
 import { PrivateImage } from './private-image';
-function Field({
-  label,
-  children,
-  wide = false,
-}: {
-  label: string;
-  children: React.ReactNode;
-  wide?: boolean;
-}) {
-  return (
-    <label className={'field-label ' + (wide ? 'wide' : '')}>
-      {label}
-      {children}
-    </label>
-  );
-}
-function Badge({ status }: { status: string }) {
-  return <span className={'status ' + status}>{labels[status] ?? status}</span>;
-}
+import {
+  Mark,
+  SiteLink,
+  Badge,
+  Busy,
+  Empty,
+  ArrowButton,
+  shortDate,
+  time,
+  labels,
+  type AdminData,
+  type Reservation,
+  type Workshop,
+  type News,
+} from './admin/shared';
+import { ContentEditor } from './admin/editors';
+import { Settings } from './admin/settings';
+import { ReservationDetail } from './admin/reservation-detail';
+import './admin/studio.css';
+
+const navigation = [
+  { id: 'overview', label: 'Vue d’ensemble', icon: LayoutDashboard },
+  { id: 'reservations', label: 'Réservations', icon: Users },
+  { id: 'workshops', label: 'Ateliers', icon: CalendarDays },
+  { id: 'news', label: 'Actualités', icon: Newspaper },
+  { id: 'settings', label: 'Équipe & emails', icon: Settings2 },
+];
+type Editor =
+  | { kind: 'workshop'; item?: Workshop }
+  | { kind: 'news'; item?: News };
+const getPage = () => {
+  const hash = window.location.hash.slice(1);
+  return navigation.some((n) => n.id === hash) ? hash : 'overview';
+};
 export default function AdminClient() {
-  const [data, setData] = useState<any>(null),
-    [user, setUser] = useState<any>(null),
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuRef = useRef<HTMLButtonElement>(null);
+  const [data, setData] = useState<AdminData | null>(null),
+    [user, setUser] = useState<{ name: string; email: string } | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
     [notice, setNotice] = useState(''),
     [busy, setBusy] = useState(false),
-    [tab, setTab] = useState('reservations');
-  const [workshop, setWorkshop] = useState<any>(null),
-    [news, setNews] = useState<any>(null),
-    [filter, setFilter] = useState(''),
+    [page, setPage] = useState(getPage),
+    [mobile, setMobile] = useState(false),
+    [showPassword, setShowPassword] = useState(false);
+  const [editor, setEditor] = useState<Editor | null>(null),
+    [selected, setSelected] = useState<Reservation | null>(null),
     [status, setStatus] = useState(''),
     [search, setSearch] = useState(''),
-    [invite, setInvite] = useState('');
-  async function refresh() {
-    const result = await api('admin');
-    setData(result);
-  }
+    [workshopFilter, setWorkshopFilter] = useState(''),
+    [contentFilter, setContentFilter] = useState(''),
+    [contentSearch, setContentSearch] = useState('');
   useEffect(() => {
-    let live = true;
+    let active = true;
     (async () => {
       try {
         const session = await api('auth/get-session');
-        if (!live) return;
+        if (!active) return;
         if (session?.user) {
           setUser(session.user);
           const result = await api('admin');
-          if (live) setData(result);
+          if (active) setData(result);
         }
       } catch (e) {
-        if (live) setError((e as Error).message);
+        if (active) setError((e as Error).message);
       } finally {
-        if (live) setLoading(false);
+        if (active) setLoading(false);
       }
     })();
+    const onHash = () => {
+      setPage(getPage());
+      setMobile(false);
+    };
+    window.addEventListener('hashchange', onHash);
     return () => {
-      live = false;
+      active = false;
+      window.removeEventListener('hashchange', onHash);
     };
   }, []);
-  async function act(task: () => Promise<void>) {
+  useEffect(() => {
+    document.title =
+      (navigation.find((n) => n.id === page)?.label ?? 'Administration') +
+      ' · Micro-Folie';
+  }, [page]);
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(''), 6000);
+    return () => window.clearTimeout(id);
+  }, [notice]);
+  useEffect(() => {
+    if (!mobile) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    sidebarRef.current?.querySelector('button')?.focus();
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobile(false);
+    };
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', escape);
+      menuRef.current?.focus();
+    };
+  }, [mobile]);
+  function go(next: string) {
+    setPage(next);
+    window.history.replaceState(null, '', '#' + next);
+    setMobile(false);
+    setContentSearch('');
+    setContentFilter('');
+  }
+  async function refresh(message = '') {
+    try {
+      const result = await api('admin');
+      setData(result);
+      setError('');
+    } catch (e) {
+      if (!message) throw e;
+      setError(
+        'L’action est enregistrée, mais la liste n’a pas pu être rechargée. Cliquez sur Actualiser les données.',
+      );
+    }
+    if (message) setNotice(message);
+  }
+  async function run(task: () => Promise<void>) {
     setBusy(true);
     setError('');
-    setNotice('');
     try {
       await task();
     } catch (e) {
@@ -111,870 +165,1095 @@ export default function AdminClient() {
   }
   async function login(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    await act(async () => {
-      await api('auth/sign-in/email', {
-        email: f.get('email'),
-        password: f.get('password'),
-        rememberMe: false,
-      });
+    const fields = Object.fromEntries(new FormData(e.currentTarget));
+    await run(async () => {
+      await api('auth/sign-in/email', { ...fields, rememberMe: false });
       const session = await api('auth/get-session');
       setUser(session.user);
       await refresh();
     });
   }
-  async function logout() {
-    await act(async () => {
+  const logout = () =>
+    void run(async () => {
       await api('auth/sign-out', {});
-      setData(null);
+      setMobile(false);
       setUser(null);
+      setData(null);
     });
-  }
   if (loading)
     return (
-      <main className="admin-login">
-        <p role="status">Ouverture de l’espace équipe…</p>
+      <main className="studio mf-loading">
+        <Mark />
+        <p>
+          <Busy>Ouverture de votre espace…</Busy>
+        </p>
       </main>
     );
   if (!data)
     return (
-      <main className="admin-login">
-        <div className="brand-mark">▦</div>
-        <p className="eyebrow">MICRO-FOLIE · NOISY-LE-SEC</p>
-        <h1>L’espace de l’équipe</h1>
-        <p>Ateliers, réservations et actualités.</p>
-        <section className="panel">
-          <h2>Connexion</h2>
-          {error && (
-            <p className="error" role="alert">
-              {error}
+      <main className="studio mf-login">
+        <section className="mf-login-art">
+          <a href={sitePath('/')} className="mf-brand">
+            <Mark />
+            <span>
+              Micro-Folie<small>Noisy-le-Sec</small>
+            </span>
+          </a>
+          <div>
+            <p className="mf-eyebrow">L’ESPACE DE L’ÉQUIPE</p>
+            <h1>
+              Un lieu vivant.
+              <br />
+              Une équipe
+              <br />
+              <em>qui le fait vivre.</em>
+            </h1>
+            <p>
+              Les ateliers, les rencontres et les nouvelles du lieu. Tout
+              commence ici.
             </p>
-          )}
-          {user ? (
-            <>
-              <p>
-                Connecté avec {user.email}. Ce compte n’a pas accès à
-                l’administration, ou le service est indisponible.
-              </p>
-              <Button onClick={() => act(refresh)} disabled={busy}>
-                Réessayer
-              </Button>
-              <Button variant="outline" onClick={logout} disabled={busy}>
-                Se déconnecter
-              </Button>
-            </>
-          ) : (
-            <form onSubmit={login} className="form-grid">
-              <Field label="Email">
-                <Input
-                  name="email"
-                  type="email"
-                  required
-                  autoComplete="username"
-                />
-              </Field>
-              <Field label="Mot de passe">
-                <Input
-                  name="password"
-                  type="password"
-                  required
-                  autoComplete="current-password"
-                />
-              </Field>
-              <Button className="wide" type="submit" disabled={busy}>
-                {busy ? 'Connexion…' : 'Se connecter'}
-              </Button>
-              <a href={sitePath('/admin/mot-de-passe/')} className="wide text-link">
-                Mot de passe oublié ?
-              </a>
-            </form>
-          )}
+          </div>
+          <div className="mf-art" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+          </div>
+          <small>53 rue de Merlan · Noisy-le-Sec</small>
         </section>
-        <a href={sitePath('/')}>← Retour au site</a>
+        <section className="mf-login-form">
+          <SiteLink />
+          <div>
+            <p className="mf-eyebrow">BIENVENUE</p>
+            <h2>Ravi de vous retrouver.</h2>
+            <p>Connectez-vous pour préparer les prochains rendez-vous.</p>
+            {error && (
+              <p className="mf-form-error" role="alert">
+                {error.includes('Invalid email or password')
+                  ? 'Email ou mot de passe incorrect. Réessayez.'
+                  : error}
+              </p>
+            )}
+            {user ? (
+              <>
+                <p>
+                  Votre session est ouverte, mais le tableau de bord n’a pas pu
+                  être chargé.
+                </p>
+                <button
+                  className="mf-button"
+                  disabled={busy}
+                  onClick={() => void run(() => refresh())}
+                >
+                  Réessayer
+                </button>
+                <button className="mf-button secondary" onClick={logout}>
+                  Se déconnecter
+                </button>
+              </>
+            ) : (
+              <form onSubmit={login}>
+                <label className="mf-field">
+                  <span>Adresse email</span>
+                  <input
+                    name="email"
+                    type="email"
+                    required
+                    autoComplete="username"
+                    placeholder="vous@exemple.fr"
+                  />
+                </label>
+                <label className="mf-field">
+                  <span>Mot de passe</span>
+                  <div className="mf-password">
+                    <input
+                      name="password"
+                      aria-label="Mot de passe"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      autoComplete="current-password"
+                      placeholder="Votre mot de passe"
+                    />
+                    <button
+                      type="button"
+                      aria-label={
+                        showPassword
+                          ? 'Masquer le mot de passe'
+                          : 'Afficher le mot de passe'
+                      }
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                </label>
+                <a
+                  className="mf-forgot"
+                  href={sitePath('/admin/mot-de-passe/')}
+                >
+                  Mot de passe oublié ?
+                </a>
+                <button className="mf-button mf-login-submit" disabled={busy}>
+                  {busy ? (
+                    <Busy>Connexion…</Busy>
+                  ) : (
+                    <>
+                      Entrer dans mon espace
+                      <ArrowRight size={17} />
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+            <p className="mf-login-foot">
+              Cet espace est réservé à l’équipe de la Micro-Folie.
+            </p>
+          </div>
+          <small>Micro-Folie · La culture, en bas de chez vous.</small>
+        </section>
       </main>
     );
-  const rows = data.reservations.filter(
-    (r: any) =>
-      (!filter || r.workshop_id === filter) &&
-      (!status || r.status === status) &&
-      (!search ||
+  const pending = data.reservations.filter((r) => r.status === 'pending'),
+    waiting = data.reservations.filter((r) => r.status === 'waitlist'),
+    upcoming = data.workshops
+      .filter(
+        (w) =>
+          w.status === 'published' && w.starts_at > new Date().toISOString(),
+      )
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const rows = data.reservations
+    .filter(
+      (r) =>
+        (!status ||
+          (status === 'closed'
+            ? ['cancelled', 'refused', 'expired'].includes(r.status)
+            : r.status === status)) &&
+        (!workshopFilter || r.workshop_id === workshopFilter) &&
         `${r.first_name} ${r.last_name} ${r.email} ${r.reference}`
           .toLowerCase()
-          .includes(search.toLowerCase())),
-  );
-  const pending = data.reservations.filter(
-      (r: any) => r.status === 'pending',
-    ).length,
-    waiting = data.reservations.filter(
-      (r: any) => r.status === 'waitlist',
-    ).length;
-  async function saveWorkshop(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fields = Object.fromEntries(new FormData(e.currentTarget));
-    await act(async () => {
-      await api('admin/workshops', {
-        ...fields,
-        id: workshop.id,
-        version: workshop.version,
-        starts_at: parisToUTC(String(fields.starts_at)),
-        ends_at: parisToUTC(String(fields.ends_at)),
-      });
-      setWorkshop(null);
-      await refresh();
-      setNotice('Atelier enregistré.');
-    });
-  }
-  async function saveNews(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const fields = Object.fromEntries(new FormData(e.currentTarget));
-    await act(async () => {
-      await api('admin/news', {
-        ...fields,
-        id: news.id,
-        version: news.version,
-        image_key: news.image_key ?? '',
-        published_at: parisToUTC(String(fields.published_at)),
-      });
-      setNews(null);
-      await refresh();
-      setNotice('Actualité enregistrée.');
-    });
-  }
-  async function decide(r: any, value: string) {
-    if (
-      !window.confirm(
-        `${value === 'confirmed' ? 'Confirmer' : value === 'refused' ? 'Refuser' : 'Annuler'} la demande ${r.reference} de ${r.first_name} ${r.last_name} (${r.participants} personne(s)) ?`,
-      )
+          .includes(search.trim().toLowerCase()),
     )
-      return;
-    await act(async () => {
-      await api('admin/reservations', {
-        id: r.id,
-        version: r.version,
-        status: value,
-      });
-      await refresh();
-      setNotice(
-        'Demande mise à jour. Consultez le suivi des emails ci-dessous.',
+    .sort((a, b) => {
+      const p = (r: Reservation) =>
+        r.status === 'pending' ? 0 : r.status === 'waitlist' ? 1 : 2;
+      return (
+        p(a) - p(b) ||
+        (a.status === 'pending'
+          ? a.hold_until.localeCompare(b.hold_until)
+          : b.created_at.localeCompare(a.created_at))
       );
     });
+  const firstName = user?.name?.split(' ')[0] || 'à vous';
+  const pageInfo: Record<string, { title: string; description: string }> = {
+    overview: {
+      title: `Bonjour ${firstName}.`,
+      description: 'Un coup d’œil sur la vie de votre Micro-Folie.',
+    },
+    reservations: {
+      title: 'Les réservations',
+      description: 'Chaque demande, la bonne attention.',
+    },
+    workshops: {
+      title: 'Le programme',
+      description:
+        'Préparez les prochaines découvertes, ouvrez les réservations.',
+    },
+    news: {
+      title: 'Les actualités',
+      description: 'Racontez ce qui se passe à la Micro-Folie.',
+    },
+    settings: {
+      title: 'L’équipe & les emails',
+      description: 'Les bons accès et les bons messages, au même endroit.',
+    },
+  };
+  const filteredWorkshops = data.workshops
+    .filter(
+      (w) =>
+        (!contentFilter || w.status === contentFilter) &&
+        w.title.toLowerCase().includes(contentSearch.toLowerCase()),
+    )
+    .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const filteredNews = data.news.filter(
+    (n) =>
+      (!contentFilter || n.status === contentFilter) &&
+      n.title.toLowerCase().includes(contentSearch.toLowerCase()),
+  );
+  const completed =
+    Number(data.workshops.length > 0) +
+    Number(data.news.length > 0) +
+    Number(data.emailConfigured);
+  function filterReservations(value: string) {
+    setStatus(value);
+    go('reservations');
+  }
+  const dateTile = (w: Workshop) => (
+    <div className="mf-date-tile">
+      <strong>{shortDate(w.starts_at, { day: '2-digit' })}</strong>
+      <span>{shortDate(w.starts_at, { month: 'short' })}</span>
+    </div>
+  );
+  function workshopRow(w: Workshop) {
+    return (
+      <button
+        className="mf-event-row"
+        key={w.id}
+        onClick={() => setEditor({ kind: 'workshop', item: w })}
+      >
+        {dateTile(w)}
+        <div>
+          <strong>{w.title}</strong>
+          <small>
+            {time(w.starts_at)} – {time(w.ends_at)} · {w.category}
+          </small>
+        </div>
+        <span className="mf-seat-summary">
+          {w.occupied}/{w.capacity}
+          <small>places retenues</small>
+        </span>
+        <ChevronRight size={17} />
+      </button>
+    );
   }
   return (
-    <div className="admin-shell">
-      <header className="admin-header">
-        <a className="brand" href={sitePath('/')}>
-          <span className="brand-mark">▦</span>
+    <div className={'studio mf-studio' + (mobile ? ' nav-open' : '')}>
+      <a className="mf-skip" href="#studio-content">
+        Aller au contenu
+      </a>
+      {mobile && (
+        <button
+          className="mf-nav-scrim"
+          aria-label="Fermer la navigation"
+          onClick={() => setMobile(false)}
+        />
+      )}
+      <aside ref={sidebarRef} className="mf-sidebar">
+        <a className="mf-brand" href={sitePath('/')}>
+          <Mark />
           <span>
-            Micro-Folie<small>Noisy-le-Sec · Équipe</small>
+            Micro-Folie<small>Noisy-le-Sec</small>
           </span>
         </a>
-        <div className="header-actions">
-          <a href={sitePath('/')} target="_blank" rel="noreferrer">
-            Voir le site <ArrowUpRight size={16} />
-          </a>
-          <Button variant="outline" onClick={logout} disabled={busy}>
-            <LogOut />
-            Déconnexion
-          </Button>
+        <div className="mf-workspace-label">
+          <span />
+          ESPACE ÉQUIPE
         </div>
-      </header>
-      <main className="admin-main">
-        <div className="page-heading">
+        <nav aria-label="Administration">
+          {navigation.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              className={page === id ? 'active' : ''}
+              aria-current={page === id ? 'page' : undefined}
+              onClick={() => go(id)}
+            >
+              <Icon size={19} />
+              <span>{label}</span>
+              {id === 'reservations' && pending.length > 0 && (
+                <b>{pending.length}</b>
+              )}
+            </button>
+          ))}
+        </nav>
+        <div className="mf-sidebar-note">
+          <Flower2 size={25} />
+          <p>
+            La culture se partage.
+            <br />
+            <strong>Vous la faites vivre.</strong>
+          </p>
+        </div>
+        <div className="mf-sidebar-user">
+          <span className="mf-avatar">
+            {user?.name
+              ?.split(' ')
+              .map((n) => n[0])
+              .slice(0, 2)
+              .join('')}
+          </span>
           <div>
-            <p className="eyebrow">L’ESPACE DE L’ÉQUIPE</p>
-            <h1>Faire vivre la Micro-Folie.</h1>
-            <p>
-              {user.name} · {user.email}
-            </p>
+            <strong>{user?.name}</strong>
+            <small>{data.isOwner ? 'Responsable' : 'Équipe Micro-Folie'}</small>
           </div>
-          <Button
-            variant="outline"
+          <button
+            className="mf-icon-button"
+            title="Déconnexion"
+            aria-label="Déconnexion"
             disabled={busy}
-            onClick={() => act(refresh)}
+            onClick={logout}
           >
-            <RefreshCw />
-            Actualiser
-          </Button>
+            <LogOut size={17} />
+          </button>
         </div>
-        <div className="stats">
-          <div>
-            <span>À confirmer</span>
-            <strong>{pending}</strong>
-            <small>Demandes à traiter sous 48 h</small>
+      </aside>
+      <div className="mf-workspace" inert={mobile}>
+        <header className="mf-topbar">
+          <button
+            ref={menuRef}
+            className="mf-mobile-menu mf-icon-button"
+            aria-label="Ouvrir la navigation"
+            aria-expanded={mobile}
+            onClick={() => setMobile(!mobile)}
+          >
+            <Menu size={21} />
+          </button>
+          <div className="mf-breadcrumb">
+            Espace équipe
+            <ChevronRight size={13} />
+            <strong>{navigation.find((n) => n.id === page)?.label}</strong>
           </div>
           <div>
-            <span>En liste d’attente</span>
-            <strong>{waiting}</strong>
-            <small>À rappeler dès qu’une place se libère</small>
+            <span className="mf-today">
+              {shortDate(new Date().toISOString(), {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+              })}
+            </span>
+            <SiteLink />
           </div>
-          <div>
-            <span>Ateliers à venir</span>
-            <strong>
-              {
-                data.workshops.filter(
-                  (w: any) =>
-                    w.status === 'published' &&
-                    w.starts_at > new Date().toISOString(),
-                ).length
-              }
-            </strong>
-            <small>Visibles dans l’agenda</small>
+        </header>
+        <main id="studio-content" className="mf-main">
+          <div className="mf-page-heading">
+            <div>
+              <p className="mf-eyebrow">
+                {page === 'overview'
+                  ? 'VOTRE MICRO-FOLIE, AU QUOTIDIEN'
+                  : 'GESTION DU LIEU'}
+              </p>
+              <h1>{pageInfo[page].title}</h1>
+              <p>{pageInfo[page].description}</p>
+            </div>
+            <div className="mf-heading-actions">
+              <button
+                className="mf-icon-button"
+                title="Actualiser les données"
+                aria-label="Actualiser les données"
+                disabled={busy}
+                onClick={() => void run(() => refresh('Données actualisées.'))}
+              >
+                <RefreshCw size={18} className={busy ? 'mf-spin' : ''} />
+              </button>
+              {page === 'news' ? (
+                <button
+                  className="mf-button"
+                  onClick={() => setEditor({ kind: 'news' })}
+                >
+                  <Plus size={17} />
+                  Nouvelle actualité
+                </button>
+              ) : (
+                page !== 'settings' && (
+                  <button
+                    className="mf-button"
+                    onClick={() => setEditor({ kind: 'workshop' })}
+                  >
+                    <Plus size={17} />
+                    Créer un atelier
+                  </button>
+                )
+              )}
+            </div>
           </div>
-        </div>
-        {error && (
-          <div role="alert" className="error notice">
-            {error}
-          </div>
-        )}
-        {notice && (
-          <div role="status" className="success notice">
-            {notice}
-          </div>
-        )}
-        {!data.emailConfigured && (
-          <div className="warning notice">
-            <strong>Les emails ne sont pas encore activés.</strong> Les demandes
-            sont enregistrées. Contactez les participants par téléphone ou email
-            jusqu’à la configuration de l’expéditeur dans l’onglet Équipe &
-            emails.
-          </div>
-        )}
-        <Tabs value={tab} onValueChange={(v) => setTab(String(v))}>
-          <TabsList className="admin-tabs">
-            <TabsTrigger value="reservations">
-              <Users />
-              Réservations
-            </TabsTrigger>
-            <TabsTrigger value="workshops">
-              <CalendarDays />
-              Ateliers
-            </TabsTrigger>
-            <TabsTrigger value="news">
-              <Newspaper />
-              Actualités
-            </TabsTrigger>
-            <TabsTrigger value="settings">
-              <Mail />
-              Équipe & emails
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="reservations">
-            <section className="panel">
-              <div className="section-heading">
-                <div>
-                  <h2>Les réservations</h2>
-                  <p>
-                    Les demandes « À confirmer » retiennent les places pendant
-                    48 heures maximum.
-                  </p>
-                </div>
-                <Button variant="outline" onClick={() => window.print()}>
-                  <Printer />
-                  Liste de présence
-                </Button>
+          {error && (
+            <div className="mf-form-error" role="alert">
+              {error}
+              <button
+                className="mf-icon-button"
+                aria-label="Fermer le message"
+                onClick={() => setError('')}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {page === 'overview' && (
+            <>
+              <section className="mf-metrics" aria-label="En un coup d’œil">
+                {[
+                  {
+                    label: 'À confirmer',
+                    value: pending.length,
+                    note: pending.length
+                      ? 'Demandes à traiter en priorité'
+                      : 'Tout est à jour',
+                    icon: Clock3,
+                    key: 'pending',
+                    color: 'orange',
+                  },
+                  {
+                    label: 'En liste d’attente',
+                    value: waiting.length,
+                    note: 'Pour les prochaines places libres',
+                    icon: Users,
+                    key: 'waitlist',
+                    color: 'blue',
+                  },
+                  {
+                    label: 'Ateliers à venir',
+                    value: upcoming.length,
+                    note: 'Ouverts aux réservations',
+                    icon: CalendarDays,
+                    key: 'workshops',
+                    color: 'green',
+                  },
+                  {
+                    label: 'Actualités publiées',
+                    value: data.news.filter(
+                      (n) =>
+                        n.status === 'published' &&
+                        n.published_at <= new Date().toISOString(),
+                    ).length,
+                    note: 'Les nouvelles visibles sur le site',
+                    icon: Newspaper,
+                    key: 'news',
+                    color: 'purple',
+                  },
+                ].map(({ label, value, note, icon: Icon, key, color }) => (
+                  <button
+                    className="mf-metric"
+                    key={key}
+                    onClick={() =>
+                      key === 'pending' || key === 'waitlist'
+                        ? filterReservations(key)
+                        : go(key)
+                    }
+                  >
+                    <span className="mf-metric-label">
+                      {label}
+                      <span className={'mf-metric-icon ' + color}>
+                        <Icon size={17} />
+                      </span>
+                    </span>
+                    <strong>{value.toString().padStart(2, '0')}</strong>
+                    <small>
+                      {note}
+                      <ArrowUpRight size={14} />
+                    </small>
+                  </button>
+                ))}
+              </section>
+              {data.workshops.length === 0 && (
+                <section className="mf-welcome">
+                  <div>
+                    <span className="mf-eyebrow">
+                      UNE NOUVELLE SAISON À ÉCRIRE
+                    </span>
+                    <h2>
+                      Tout commence
+                      <br />
+                      par un rendez-vous.
+                    </h2>
+                    <p>
+                      Ajoutez votre premier atelier. Il apparaîtra dans l’agenda
+                      dès sa publication, prêt à accueillir ses premiers
+                      participants.
+                    </p>
+                    <button
+                      className="mf-button"
+                      onClick={() => setEditor({ kind: 'workshop' })}
+                    >
+                      Créer le premier atelier
+                      <ArrowRight size={17} />
+                    </button>
+                  </div>
+                  <div className="mf-welcome-art" aria-hidden="true">
+                    <i />
+                    <i />
+                    <i />
+                    <span>
+                      PLACE AUX
+                      <br />
+                      RENCONTRES.
+                    </span>
+                  </div>
+                </section>
+              )}
+              <div className="mf-overview-grid">
+                <section className="mf-card">
+                  <header className="mf-card-header">
+                    <div>
+                      <span className="mf-eyebrow">LE PROGRAMME</span>
+                      <h2>Les prochains rendez-vous</h2>
+                    </div>
+                    <ArrowButton onClick={() => go('workshops')}>
+                      Tout voir
+                    </ArrowButton>
+                  </header>
+                  {upcoming.length ? (
+                    <div>{upcoming.slice(0, 4).map(workshopRow)}</div>
+                  ) : (
+                    <Empty
+                      icon={<CalendarDays size={27} />}
+                      title="Le programme est à écrire"
+                      text="Les ateliers publiés et à venir apparaîtront ici."
+                      action={
+                        <ArrowButton
+                          onClick={() => setEditor({ kind: 'workshop' })}
+                        >
+                          Préparer un atelier
+                        </ArrowButton>
+                      }
+                    />
+                  )}
+                </section>
+                <section className="mf-card mf-priorities">
+                  <header className="mf-card-header">
+                    <div>
+                      <span className="mf-eyebrow">VOTRE PROCHAINE ACTION</span>
+                      <h2>
+                        {completed < 3 ? 'Bien démarrer' : 'À votre attention'}
+                      </h2>
+                    </div>
+                    {completed < 3 && (
+                      <span className="mf-count">{completed}/3</span>
+                    )}
+                  </header>
+                  {completed < 3 ? (
+                    <div className="mf-start-steps">
+                      {[
+                        {
+                          label: 'Préparer le premier atelier',
+                          hint: 'Une date, une activité, des places.',
+                          done: data.workshops.length > 0,
+                          click: () => setEditor({ kind: 'workshop' }),
+                        },
+                        {
+                          label: 'Partager une première actualité',
+                          hint: 'Donner des nouvelles du lieu.',
+                          done: data.news.length > 0,
+                          click: () => setEditor({ kind: 'news' }),
+                        },
+                        {
+                          label: 'Activer les emails',
+                          hint: 'Prévenir les participants automatiquement.',
+                          done: data.emailConfigured,
+                          click: () => go('settings'),
+                        },
+                      ].map((s, i) => (
+                        <button key={s.label} onClick={s.click}>
+                          <span className={s.done ? 'done' : ''}>
+                            {s.done ? (
+                              <Check size={15} />
+                            ) : (
+                              String(i + 1).padStart(2, '0')
+                            )}
+                          </span>
+                          <div>
+                            <strong>{s.label}</strong>
+                            <small>{s.hint}</small>
+                          </div>
+                          <ChevronRight size={16} />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mf-start-steps">
+                      <button onClick={() => filterReservations('pending')}>
+                        <span>
+                          <Clock3 size={18} />
+                        </span>
+                        <div>
+                          <strong>
+                            {pending.length
+                              ? `${pending.length} demande(s) à confirmer`
+                              : 'Aucune demande à traiter'}
+                          </strong>
+                          <small>Retrouvez toutes les réservations.</small>
+                        </div>
+                        <ChevronRight size={16} />
+                      </button>
+                      <button onClick={() => go('settings')}>
+                        <span>
+                          <Mail size={18} />
+                        </span>
+                        <div>
+                          <strong>
+                            {data.mail.length} email(s) en attente
+                          </strong>
+                          <small>Vérifier les envois aux participants.</small>
+                        </div>
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  )}
+                </section>
               </div>
-              <div className="filters">
-                <Input
-                  aria-label="Chercher une réservation"
-                  placeholder="Nom, email, référence…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-                <NativeSelect
+            </>
+          )}
+          {page === 'reservations' && (
+            <section className="mf-card mf-reservations">
+              <div
+                className="mf-status-tabs"
+                role="group"
+                aria-label="Statut des réservations"
+              >
+                {[
+                  ['', 'Toutes'],
+                  ['pending', 'À confirmer'],
+                  ['confirmed', 'Confirmées'],
+                  ['waitlist', 'Liste d’attente'],
+                  ['closed', 'Terminées'],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    className={status === value ? 'active' : ''}
+                    aria-pressed={status === value}
+                    onClick={() => setStatus(value)}
+                  >
+                    {label}
+                    <span>
+                      {value === 'closed'
+                        ? data.reservations.filter((r) =>
+                            ['cancelled', 'refused', 'expired'].includes(
+                              r.status,
+                            ),
+                          ).length
+                        : data.reservations.filter(
+                            (r) => !value || r.status === value,
+                          ).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="mf-toolbar">
+                <label className="mf-search">
+                  <Search size={17} />
+                  <input
+                    aria-label="Chercher une réservation"
+                    placeholder="Nom, email ou référence…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </label>
+                <select
                   aria-label="Filtrer par atelier"
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
+                  value={workshopFilter}
+                  onChange={(e) => setWorkshopFilter(e.target.value)}
                 >
                   <option value="">Tous les ateliers</option>
-                  {data.workshops.map((w: any) => (
+                  {data.workshops.map((w) => (
                     <option key={w.id} value={w.id}>
-                      {w.title} · {formatDate(w.starts_at)}
+                      {w.title} · {shortDate(w.starts_at)}
                     </option>
                   ))}
-                </NativeSelect>
-                <NativeSelect
-                  aria-label="Filtrer par statut"
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
+                </select>
+                <button
+                  className="mf-button secondary"
+                  disabled={
+                    !data.reservations.some(
+                      (r) =>
+                        r.status === 'confirmed' &&
+                        (!workshopFilter || r.workshop_id === workshopFilter),
+                    )
+                  }
+                  onClick={() => window.print()}
                 >
-                  <option value="">Tous les statuts</option>
-                  {[
-                    'pending',
-                    'confirmed',
-                    'waitlist',
-                    'refused',
-                    'cancelled',
-                    'expired',
-                  ].map((s) => (
-                    <option key={s} value={s}>
-                      {labels[s]}
-                    </option>
-                  ))}
-                </NativeSelect>
+                  <Printer size={16} />
+                  Liste de présence
+                </button>
               </div>
-              <div className="print-list">
-                <h2 className="print-only">Micro-Folie · Liste de présence</h2>
-                <p className="print-only">
-                  {filter
-                    ? data.workshops.find((w: any) => w.id === filter)?.title
-                    : 'Tous les ateliers'}{' '}
-                  · {rows.length} demandes ·{' '}
-                  {rows.reduce((n: number, r: any) => n + r.participants, 0)}{' '}
-                  personnes
-                </p>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Participant</TableHead>
-                      <TableHead>Atelier</TableHead>
-                      <TableHead>Places</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead className="no-print">Actions</TableHead>
-                      <TableHead className="print-only">Présence</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rows.map((r: any) => (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <strong>
-                            {r.first_name} {r.last_name}
-                          </strong>
-                          <small>{r.reference}</small>
-                          <a href={'mailto:' + r.email}>{r.email}</a>
-                          {r.phone && <a href={'tel:' + r.phone}>{r.phone}</a>}
-                        </TableCell>
-                        <TableCell>
-                          {r.title}
-                          <small>{formatDate(r.starts_at)}</small>
-                        </TableCell>
-                        <TableCell>{r.participants}</TableCell>
-                        <TableCell>
-                          <Badge status={r.status} />
-                          {r.status === 'pending' && (
-                            <small>Jusqu’au {formatDate(r.hold_until)}</small>
-                          )}
-                        </TableCell>
-                        <TableCell className="no-print actions">
-                          {['pending', 'waitlist'].includes(r.status) && (
-                            <>
-                              <Button
-                                disabled={busy}
-                                onClick={() => decide(r, 'confirmed')}
+              {!data.emailConfigured && (
+                <div className="mf-mail-strip">
+                  <Mail size={16} />
+                  <span>
+                    Les emails sont désactivés. Prévenez directement les
+                    participants.
+                  </span>
+                  <button onClick={() => go('settings')}>
+                    Configurer
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
+              )}
+              {rows.length ? (
+                <>
+                  <div className="mf-table-scroll">
+                    <table className="mf-reservation-table">
+                      <thead>
+                        <tr>
+                          <th>Participant</th>
+                          <th>Atelier</th>
+                          <th>Places</th>
+                          <th>Statut</th>
+                          <th>
+                            <span className="mf-sr-only">Consulter</span>
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r) => (
+                          <tr key={r.id}>
+                            <td>
+                              <button
+                                className="mf-participant"
+                                onClick={() => setSelected(r)}
                               >
-                                Confirmer
-                              </Button>
-                              <Button
-                                disabled={busy}
-                                variant="outline"
-                                onClick={() => decide(r, 'refused')}
+                                <span className="mf-avatar pale">
+                                  {r.first_name[0]}
+                                  {r.last_name[0]}
+                                </span>
+                                <span>
+                                  <strong>
+                                    {r.first_name} {r.last_name}
+                                  </strong>
+                                  <small>{r.email}</small>
+                                </span>
+                              </button>
+                            </td>
+                            <td>
+                              <strong>{r.title}</strong>
+                              <small>
+                                {shortDate(r.starts_at)} · {time(r.starts_at)}
+                              </small>
+                            </td>
+                            <td>
+                              <span className="mf-person-count">
+                                <Users size={14} />
+                                {r.participants}
+                              </span>
+                            </td>
+                            <td>
+                              <Badge status={r.status} />
+                              {r.status === 'pending' && (
+                                <small>
+                                  Avant le {shortDate(r.hold_until)} ·{' '}
+                                  {time(r.hold_until)}
+                                </small>
+                              )}
+                            </td>
+                            <td>
+                              <button
+                                className="mf-icon-button"
+                                aria-label={
+                                  'Consulter la demande de ' +
+                                  r.first_name +
+                                  ' ' +
+                                  r.last_name
+                                }
+                                onClick={() => setSelected(r)}
                               >
-                                Refuser
-                              </Button>
-                            </>
-                          )}
-                          {r.status === 'confirmed' && (
-                            <Button
-                              variant="outline"
-                              disabled={busy}
-                              onClick={() => decide(r, 'cancelled')}
-                            >
-                              Annuler
-                            </Button>
-                          )}
-                        </TableCell>
-                        <TableCell className="print-only">□</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-                {!rows.length && (
-                  <p className="empty">
-                    Aucune réservation pour cette sélection.
-                  </p>
-                )}
-              </div>
-              <p className="muted">
-                Les 1 000 dernières demandes sont affichées. La liste d’attente
-                est traitée par l’équipe, sans confirmation automatique.
-              </p>
-            </section>
-          </TabsContent>
-          <TabsContent value="workshops">
-            <section className="panel">
-              <div className="section-heading">
-                <div>
-                  <h2>Les ateliers</h2>
-                  <p>
-                    Une seule publication alimente l’agenda et les réservations.
-                  </p>
-                </div>
-                <Button
-                  disabled={busy}
-                  onClick={() =>
-                    setWorkshop({
-                      status: 'draft',
-                      category: 'Famille',
-                      capacity: 12,
-                      min_age: 0,
-                    })
-                  }
-                >
-                  <Plus />
-                  Créer un atelier
-                </Button>
-              </div>
-              {workshop && (
-                <form
-                  className="editor form-grid"
-                  key={workshop.id ?? 'new'}
-                  onSubmit={saveWorkshop}
-                >
-                  <h3 className="wide">
-                    {workshop.id ? 'Modifier l’atelier' : 'Nouvel atelier'}
-                  </h3>
-                  <Field label="Titre" wide>
-                    <Input
-                      name="title"
-                      defaultValue={workshop.title}
-                      maxLength={180}
-                      required
-                    />
-                  </Field>
-                  <Field label="Description" wide>
-                    <Textarea
-                      name="description"
-                      defaultValue={workshop.description}
-                      required
-                      maxLength={5000}
-                    />
-                  </Field>
-                  <Field label="Catégorie">
-                    <NativeSelect
-                      name="category"
-                      defaultValue={workshop.category}
-                    >
-                      {[
-                        'Famille',
-                        'FabLab',
-                        'Cuisine',
-                        'Jardin',
-                        'Musée numérique',
-                        'Événement',
-                      ].map((c) => (
-                        <option key={c}>{c}</option>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                  <Field label="Statut">
-                    <NativeSelect name="status" defaultValue={workshop.status}>
-                      {['draft', 'published', 'archived'].map((s) => (
-                        <option key={s} value={s}>
-                          {labels[s]}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                  <Field label="Début · heure de Paris">
-                    <Input
-                      name="starts_at"
-                      type="datetime-local"
-                      defaultValue={parisInput(workshop.starts_at)}
-                      required
-                    />
-                  </Field>
-                  <Field label="Fin · heure de Paris">
-                    <Input
-                      name="ends_at"
-                      type="datetime-local"
-                      defaultValue={parisInput(workshop.ends_at)}
-                      required
-                    />
-                  </Field>
-                  <Field label="Nombre de places">
-                    <Input
-                      name="capacity"
-                      type="number"
-                      min={1}
-                      max={500}
-                      defaultValue={workshop.capacity}
-                      required
-                    />
-                  </Field>
-                  <Field label="Âge minimum">
-                    <Input
-                      name="min_age"
-                      type="number"
-                      min={0}
-                      max={110}
-                      defaultValue={workshop.min_age}
-                      required
-                    />
-                  </Field>
-                  <div className="actions wide">
-                    <Button type="submit" disabled={busy}>
-                      Enregistrer l’atelier
-                    </Button>
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() => setWorkshop(null)}
-                    >
-                      Fermer
-                    </Button>
+                                <ChevronRight size={18} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                </form>
-              )}
-              <div className="item-list">
-                {data.workshops.map((w: any) => (
-                  <article className="item" key={w.id}>
-                    <div>
-                      <Badge status={w.status} />
-                      <h3>{w.title}</h3>
-                      <p>
-                        {formatDate(w.starts_at)} · {w.category}
-                      </p>
-                      <small>
-                        {w.occupied} / {w.capacity} places retenues · dès{' '}
-                        {w.min_age} ans
-                      </small>
-                    </div>
-                    <Button variant="outline" onClick={() => setWorkshop(w)}>
-                      Modifier
-                    </Button>
-                  </article>
-                ))}
-                {!data.workshops.length && (
-                  <p className="empty">
-                    Créez le premier atelier pour ouvrir les réservations. Les
-                    anciennes dates ne sont pas reconduites automatiquement.
-                  </p>
-                )}
-              </div>
-            </section>
-          </TabsContent>
-          <TabsContent value="news">
-            <section className="panel">
-              <div className="section-heading">
-                <div>
-                  <h2>Les actualités</h2>
-                  <p>Rédigez un brouillon, ajoutez une photo, puis publiez.</p>
-                </div>
-                <Button
-                  onClick={() =>
-                    setNews({
-                      status: 'draft',
-                      published_at: new Date().toISOString(),
-                    })
-                  }
-                >
-                  <Plus />
-                  Nouvelle actualité
-                </Button>
-              </div>
-              {news && (
-                <form
-                  className="editor form-grid"
-                  key={news.id ?? 'new'}
-                  onSubmit={saveNews}
-                >
-                  <h3 className="wide">
-                    {news.id ? 'Modifier l’actualité' : 'Nouvelle actualité'}
-                  </h3>
-                  <Field label="Titre" wide>
-                    <Input
-                      name="title"
-                      defaultValue={news.title}
-                      required
-                      maxLength={180}
-                    />
-                  </Field>
-                  <Field label="Texte" wide>
-                    <Textarea
-                      name="body"
-                      defaultValue={news.body}
-                      required
-                      maxLength={12000}
-                      rows={8}
-                    />
-                  </Field>
-                  <Field label="Photo · JPEG, PNG, WebP, 3 Mo maximum" wide>
-                    <Input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      disabled={busy}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file)
-                          act(async () => {
-                            if (file.size > 3 * 1024 * 1024)
-                              throw new Error('Photo limitée à 3 Mo.');
-                            const r = await apiFetch('upload', {
-                              method: 'POST',
-                              headers: { 'Content-Type': file.type },
-                              body: file,
-                            });
-                            const result: any = await r.json();
-                            if (!r.ok) throw new Error(result.error);
-                            setNews((n: any) => ({
-                              ...n,
-                              image_key: result.key,
-                            }));
-                          });
-                      }}
-                    />
-                  </Field>
-                  {news.image_key && (
-                    <div className="wide photo-preview">
-                      <PrivateImage imageKey={news.image_key} />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={() => setNews({ ...news, image_key: '' })}
-                      >
-                        Retirer la photo
-                      </Button>
-                    </div>
-                  )}
-                  <Field label="Lien facultatif" wide>
-                    <Input
-                      name="link"
-                      type="url"
-                      placeholder="https://…"
-                      defaultValue={news.link}
-                    />
-                  </Field>
-                  <Field label="Publication · heure de Paris">
-                    <Input
-                      name="published_at"
-                      type="datetime-local"
-                      defaultValue={parisInput(news.published_at)}
-                      required
-                    />
-                  </Field>
-                  <Field label="Statut">
-                    <NativeSelect name="status" defaultValue={news.status}>
-                      {['draft', 'published', 'archived'].map((s) => (
-                        <option key={s} value={s}>
-                          {labels[s]}
-                        </option>
-                      ))}
-                    </NativeSelect>
-                  </Field>
-                  <p className="wide muted">
-                    Une actualité publiée avec une date future apparaîtra à
-                    cette date.
-                  </p>
-                  <div className="actions wide">
-                    <Button type="submit" disabled={busy}>
-                      Enregistrer l’actualité
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setNews(null)}
-                    >
-                      Fermer
-                    </Button>
+                  <div className="mf-table-footer">
+                    {rows.length} demande(s) ·{' '}
+                    {rows.reduce((sum, r) => sum + r.participants, 0)}{' '}
+                    personne(s)
+                    <span>
+                      Les demandes à confirmer apparaissent en premier.
+                    </span>
                   </div>
-                </form>
-              )}
-              <div className="item-list">
-                {data.news.map((n: any) => (
-                  <article className="item" key={n.id}>
-                    <div>
-                      <Badge status={n.status} />
-                      <h3>{n.title}</h3>
-                      <p>{formatDate(n.published_at)}</p>
-                    </div>
-                    <Button variant="outline" onClick={() => setNews(n)}>
-                      Modifier
-                    </Button>
-                  </article>
-                ))}
-                {!data.news.length && (
-                  <p className="empty">
-                    Aucune actualité. Préparez la première nouvelle du lieu.
-                  </p>
-                )}
-              </div>
-            </section>
-          </TabsContent>
-          <TabsContent value="settings">
-            <section className="panel">
-              <div className="section-heading">
-                <div>
-                  <h2>Suivi des emails</h2>
-                  <p>
-                    {data.emailConfigured
-                      ? 'Un expéditeur est configuré. Les éventuels échecs apparaissent ici.'
-                      : 'Les emails restent en attente jusqu’à l’activation de l’expéditeur.'}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  disabled={busy || !data.emailConfigured}
-                  onClick={() =>
-                    act(async () => {
-                      const r = await api('admin/mail/retry', {});
-                      await refresh();
-                      setNotice(
-                        `${r.sent} email(s) accepté(s) par le service d’envoi.`,
-                      );
-                    })
+                </>
+              ) : (
+                <Empty
+                  title={
+                    data.reservations.length
+                      ? 'Aucune demande ne correspond'
+                      : 'Les prochaines rencontres commencent ici'
                   }
-                >
-                  Relancer les envois
-                </Button>
-              </div>
-              {data.mail.map((m: any) => (
-                <div className="mail-item" key={m.id}>
-                  <strong>{m.subject}</strong>
-                  <p>
-                    {m.status === 'sending' ? 'En cours' : 'En attente'} ·{' '}
-                    {m.attempts} tentative(s)
-                  </p>
-                  {m.last_error && <small>{m.last_error}</small>}
-                </div>
-              ))}
-              {!data.mail.length && (
-                <p className="empty">Aucun email en attente.</p>
-              )}
-            </section>
-            {data.isOwner && (
-              <>
-                <section className="panel">
-                  <h2>Expéditeur des emails</h2>
-                  <p>
-                    Renseignez une adresse d’envoi sur un domaine vérifié dans
-                    Resend. La clé est protégée et ne sera jamais affichée.
-                  </p>
-                  <form
-                    className="form-grid"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const f = new FormData(e.currentTarget);
-                      act(async () => {
-                        await api('admin/mail/config', Object.fromEntries(f));
-                        await refresh();
-                        setNotice(
-                          'Expéditeur enregistré. Vous pouvez relancer les emails en attente.',
-                        );
-                      });
-                    }}
-                  >
-                    <Field label="Adresse d’envoi">
-                      <Input
-                        type="email"
-                        name="from"
-                        required
-                        defaultValue={data.emailFrom}
-                        placeholder="reservations@votre-domaine.fr"
-                      />
-                    </Field>
-                    <Field label="Clé API Resend">
-                      <Input
-                        type="password"
-                        name="key"
-                        autoComplete="off"
-                        placeholder={
-                          data.emailConfigured
-                            ? 'Laisser vide pour conserver la clé'
-                            : 're_…'
-                        }
-                      />
-                    </Field>
-                    <Button type="submit" disabled={busy}>
-                      Enregistrer l’expéditeur
-                    </Button>
-                  </form>
-                </section>
-                <section className="panel">
-                  <h2>Accès de l’équipe</h2>
-                  <p>
-                    Responsable : {data.ownerEmail}. Chaque membre choisit son
-                    propre mot de passe.
-                  </p>
-                  <form
-                    className="filters"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const f = new FormData(e.currentTarget);
-                      act(async () => {
-                        const r = await api('admin/invite', {
-                          email: f.get('email'),
-                        });
-                        setInvite(r.url);
-                        await refresh();
-                      });
-                    }}
-                  >
-                    <Input
-                      name="email"
-                      type="email"
-                      required
-                      aria-label="Email du membre à ajouter"
-                      placeholder="Email du membre de l’équipe"
-                    />
-                    <Button type="submit" disabled={busy}>
-                      Créer un lien d’activation
-                    </Button>
-                  </form>
-                  {invite && (
-                    <div className="notice success">
-                      <p>
-                        Transmettez ce lien personnel au membre concerné. Il est
-                        utilisable une fois pendant 7 jours.
-                      </p>
-                      <Input
-                        readOnly
-                        value={invite}
-                        aria-label="Lien d’activation"
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          act(async () => {
-                            await navigator.clipboard.writeText(invite);
-                            setNotice('Lien copié.');
-                          })
-                        }
-                      >
-                        Copier le lien
-                      </Button>
-                    </div>
-                  )}
-                  {data.admins.map((a: any) => (
-                    <div className="item" key={a.email}>
-                      <span>{a.email}</span>
-                      <Button
-                        variant="outline"
-                        disabled={busy}
+                  text={
+                    data.reservations.length
+                      ? 'Essayez un autre filtre ou recherchez un autre participant.'
+                      : 'Dès qu’un visiteur réserve un atelier, sa demande apparaît ici. Vous pourrez la consulter et la confirmer.'
+                  }
+                  action={
+                    data.reservations.length ? (
+                      <ArrowButton
                         onClick={() => {
-                          if (
-                            window.confirm(
-                              'Retirer l’accès de ' + a.email + ' ?',
-                            )
-                          )
-                            act(async () => {
-                              await api('admin/revoke', { email: a.email });
-                              await refresh();
-                            });
+                          setSearch('');
+                          setStatus('');
+                          setWorkshopFilter('');
                         }}
                       >
-                        Retirer l’accès
-                      </Button>
-                    </div>
+                        Réinitialiser les filtres
+                      </ArrowButton>
+                    ) : (
+                      <ArrowButton onClick={() => go('workshops')}>
+                        Voir les ateliers
+                      </ArrowButton>
+                    )
+                  }
+                />
+              )}
+            </section>
+          )}
+          {(page === 'workshops' || page === 'news') && (
+            <>
+              <div className="mf-content-toolbar">
+                <div
+                  className="mf-filter-pills"
+                  role="group"
+                  aria-label="Visibilité des contenus"
+                >
+                  {[
+                    ['', 'Tous'],
+                    ['published', 'Publiés'],
+                    ['draft', 'Brouillons'],
+                    ['archived', 'Archivés'],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      aria-pressed={contentFilter === value}
+                      className={contentFilter === value ? 'active' : ''}
+                      onClick={() => setContentFilter(value)}
+                    >
+                      {label}
+                    </button>
                   ))}
+                </div>
+                <label className="mf-search">
+                  <Search size={17} />
+                  <input
+                    aria-label={
+                      page === 'news'
+                        ? 'Rechercher une actualité'
+                        : 'Rechercher un atelier'
+                    }
+                    placeholder="Rechercher…"
+                    value={contentSearch}
+                    onChange={(e) => setContentSearch(e.target.value)}
+                  />
+                </label>
+              </div>
+              {page === 'workshops' ? (
+                filteredWorkshops.length ? (
+                  <div className="mf-workshop-grid">
+                    {filteredWorkshops.map((w) => (
+                      <article className="mf-workshop-card" key={w.id}>
+                        <header>
+                          {dateTile(w)}
+                          <Badge status={w.status} />
+                        </header>
+                        <span className="mf-category">{w.category}</span>
+                        <h2>{w.title}</h2>
+                        <p>
+                          {shortDate(w.starts_at, {
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long',
+                          })}
+                          <br />
+                          {time(w.starts_at)} – {time(w.ends_at)}
+                        </p>
+                        <div className="mf-capacity">
+                          <div>
+                            <span>
+                              <strong>{w.occupied}</strong> / {w.capacity}{' '}
+                              places retenues
+                            </span>
+                            <small>
+                              {w.min_age > 0
+                                ? `Dès ${w.min_age} ans`
+                                : 'Tous les âges'}
+                            </small>
+                          </div>
+                          <progress
+                            value={w.occupied}
+                            max={w.capacity}
+                            aria-label={'Places retenues pour ' + w.title}
+                          />
+                        </div>
+                        <footer>
+                          <button
+                            className="mf-text-button"
+                            onClick={() => {
+                              setWorkshopFilter(w.id);
+                              setStatus('');
+                              go('reservations');
+                            }}
+                          >
+                            Réservations
+                            <ArrowUpRight size={15} />
+                          </button>
+                          <button
+                            className="mf-button secondary"
+                            onClick={() =>
+                              setEditor({ kind: 'workshop', item: w })
+                            }
+                          >
+                            Modifier
+                            <FilePenLine size={15} />
+                          </button>
+                        </footer>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <section className="mf-card">
+                    <Empty
+                      icon={<CalendarDays size={30} />}
+                      title={
+                        data.workshops.length
+                          ? 'Aucun atelier pour ce filtre'
+                          : 'Quel sera le prochain rendez-vous ?'
+                      }
+                      text={
+                        data.workshops.length
+                          ? 'Modifiez votre recherche ou la visibilité sélectionnée.'
+                          : 'Une visite du musée, une création au FabLab, un atelier en famille… Préparez votre première date en quelques minutes.'
+                      }
+                      action={
+                        <button
+                          className="mf-button"
+                          onClick={() => setEditor({ kind: 'workshop' })}
+                        >
+                          <Plus size={17} />
+                          Créer un atelier
+                        </button>
+                      }
+                    />
+                  </section>
+                )
+              ) : filteredNews.length ? (
+                <div className="mf-news-grid">
+                  {filteredNews.map((n) => (
+                    <article className="mf-news-card" key={n.id}>
+                      <div className="mf-news-image">
+                        {n.image_key ? (
+                          <PrivateImage imageKey={n.image_key} />
+                        ) : (
+                          <div>
+                            <Newspaper size={35} />
+                            <span>LES NOUVELLES DU LIEU</span>
+                          </div>
+                        )}
+                        <Badge status={n.status} />
+                      </div>
+                      <div className="mf-news-body">
+                        <small>
+                          {shortDate(n.published_at, {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          })}
+                          {n.status === 'published' &&
+                          n.published_at > new Date().toISOString()
+                            ? ' · Programmée'
+                            : ''}
+                        </small>
+                        <h2>{n.title}</h2>
+                        <p>{n.body}</p>
+                        <button
+                          className="mf-text-button"
+                          onClick={() => setEditor({ kind: 'news', item: n })}
+                        >
+                          Ouvrir l’actualité
+                          <ArrowRight size={16} />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <section className="mf-card">
+                  <Empty
+                    icon={<Newspaper size={30} />}
+                    title={
+                      data.news.length
+                        ? 'Aucune actualité pour ce filtre'
+                        : 'Le lieu a des histoires à raconter'
+                    }
+                    text={
+                      data.news.length
+                        ? 'Modifiez votre recherche ou la visibilité sélectionnée.'
+                        : 'Un retour en images, une nouvelle exposition, un temps fort à annoncer. Partagez votre première actualité.'
+                    }
+                    action={
+                      <button
+                        className="mf-button"
+                        onClick={() => setEditor({ kind: 'news' })}
+                      >
+                        <Plus size={17} />
+                        Rédiger une actualité
+                      </button>
+                    }
+                  />
                 </section>
-              </>
-            )}
-          </TabsContent>
-        </Tabs>
-        <footer className="admin-footer">
-          Micro-Folie Noisy-le-Sec · Accès réservé à l’équipe
-        </footer>
-      </main>
+              )}
+            </>
+          )}
+          {page === 'settings' && <Settings data={data} onSaved={refresh} />}
+          <footer className="mf-footer">
+            <span>Micro-Folie de Noisy-le-Sec</span>
+            <span>Un lieu pour découvrir. Un espace pour le faire vivre.</span>
+          </footer>
+        </main>
+      </div>
+      {notice && (
+        <div className="mf-toast" role="status">
+          <span>
+            <Check size={17} />
+          </span>
+          {notice}
+          <button
+            aria-label="Fermer la notification"
+            onClick={() => setNotice('')}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      {editor && (
+        <ContentEditor
+          key={editor.kind + (editor.item?.id ?? 'new')}
+          {...editor}
+          onClose={() => setEditor(null)}
+          onSaved={refresh}
+        />
+      )}
+      {selected && (
+        <ReservationDetail
+          reservation={selected}
+          workshop={data.workshops.find((w) => w.id === selected.workshop_id)}
+          emailConfigured={data.emailConfigured}
+          onClose={() => setSelected(null)}
+          onSaved={refresh}
+        />
+      )}
+      <section className="mf-print">
+        <h1>Micro-Folie · Liste de présence</h1>
+        <p>
+          {workshopFilter
+            ? data.workshops.find((w) => w.id === workshopFilter)?.title
+            : 'Tous les ateliers'}{' '}
+          · Réservations confirmées
+        </p>
+        <table>
+          <thead>
+            <tr>
+              <th>Participant</th>
+              <th>Atelier</th>
+              <th>Places</th>
+              <th>Présence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.reservations
+              .filter(
+                (r) =>
+                  r.status === 'confirmed' &&
+                  (!workshopFilter || r.workshop_id === workshopFilter),
+              )
+              .map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    {r.first_name} {r.last_name}
+                  </td>
+                  <td>
+                    {r.title} · {shortDate(r.starts_at)}
+                  </td>
+                  <td>{r.participants}</td>
+                  <td>□</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </section>
     </div>
   );
 }
