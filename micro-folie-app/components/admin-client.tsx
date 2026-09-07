@@ -36,7 +36,9 @@ const labels: Record<string, string> = {
   published: 'Publié',
   archived: 'Archivé',
 };
-import { api } from '../lib/http';
+import { api, apiFetch } from '../lib/http';
+import { sitePath } from '../lib/urls';
+import { PrivateImage } from './private-image';
 function Field({
   label,
   children,
@@ -182,13 +184,13 @@ export default function AdminClient() {
               <Button className="wide" type="submit" disabled={busy}>
                 {busy ? 'Connexion…' : 'Se connecter'}
               </Button>
-              <a href="/admin/mot-de-passe" className="wide text-link">
+              <a href={sitePath('/admin/mot-de-passe/')} className="wide text-link">
                 Mot de passe oublié ?
               </a>
             </form>
           )}
         </section>
-        <a href="/">← Retour au site</a>
+        <a href={sitePath('/')}>← Retour au site</a>
       </main>
     );
   const rows = data.reservations.filter(
@@ -260,14 +262,14 @@ export default function AdminClient() {
   return (
     <div className="admin-shell">
       <header className="admin-header">
-        <a className="brand" href="/">
+        <a className="brand" href={sitePath('/')}>
           <span className="brand-mark">▦</span>
           <span>
             Micro-Folie<small>Noisy-le-Sec · Équipe</small>
           </span>
         </a>
         <div className="header-actions">
-          <a href="/" target="_blank" rel="noreferrer">
+          <a href={sitePath('/')} target="_blank" rel="noreferrer">
             Voir le site <ArrowUpRight size={16} />
           </a>
           <Button variant="outline" onClick={logout} disabled={busy}>
@@ -707,7 +709,7 @@ export default function AdminClient() {
                           act(async () => {
                             if (file.size > 3 * 1024 * 1024)
                               throw new Error('Photo limitée à 3 Mo.');
-                            const r = await fetch('/api/upload', {
+                            const r = await apiFetch('upload', {
                               method: 'POST',
                               headers: { 'Content-Type': file.type },
                               body: file,
@@ -724,10 +726,7 @@ export default function AdminClient() {
                   </Field>
                   {news.image_key && (
                     <div className="wide photo-preview">
-                      <img
-                        src={'/api/image/' + news.image_key}
-                        alt="Photo de l’actualité"
-                      />
+                      <PrivateImage imageKey={news.image_key} />
                       <Button
                         type="button"
                         variant="outline"

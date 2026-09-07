@@ -1,5 +1,5 @@
-import { env } from 'cloudflare:workers';
-import { makeAuth } from '../../../lib/auth';
+import { getPool, Database, FileStore } from './database.ts';
+import { makeAuth } from './auth.ts';
 import {
   Service,
   HttpError,
@@ -10,9 +10,14 @@ import {
   email,
   str,
   type Bindings,
-} from '../../../lib/service';
-export const dynamic = 'force-dynamic';
-const bindings = () => env as unknown as Bindings;
+} from './service.ts';
+export const bindings = (): Bindings => ({
+  DB: new Database(getPool()), FILES: new FileStore(getPool()),
+  ADMIN_EMAIL: process.env.ADMIN_EMAIL, SITE_URL: process.env.SITE_URL,
+  API_URL: process.env.API_URL, AUTH_SECRET: process.env.AUTH_SECRET,
+  ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+  BOOTSTRAP_HASH: process.env.BOOTSTRAP_HASH, BOOTSTRAP_EXPIRES: process.env.BOOTSTRAP_EXPIRES,
+});
 function json(value: unknown, status = 200) {
   return Response.json(value, {
     status,
@@ -24,7 +29,7 @@ function json(value: unknown, status = 200) {
   });
 }
 function origin(req: Request) {
-  if (req.headers.get('origin') !== bindings().SITE_URL)
+  if (req.headers.get('origin') !== new URL(bindings().SITE_URL!).origin)
     throw new HttpError(403, 'Origine de la demande refusée.');
 }
 async function bytes(req: Request, max: number) {
@@ -62,7 +67,7 @@ async function body(req: Request) {
     throw new HttpError(400, 'Demande invalide.');
   }
 }
-async function handle(req: Request) {
+export async function handle(req: Request) {
   const e = bindings(),
     s = new Service(e),
     path = new URL(req.url).pathname.replace(/^\/api\//, '');
@@ -83,12 +88,14 @@ async function handle(req: Request) {
         ].includes(endpoint)
       )
         throw new HttpError(404, 'Route introuvable.');
-      if (req.method === 'POST')
+      if (req.method === 'POST') {
+        await body(req.clone());
         await s.limit(
           'auth-ip:' +
             (await hash(req.headers.get('cf-connecting-ip') ?? 'shared')),
           60,
         );
+      }
       const response = await makeAuth(e).handler(req);
       response.headers.set('Cache-Control', 'no-store');
       return response;
@@ -321,5 +328,3 @@ async function handle(req: Request) {
     );
   }
 }
-export const GET = handle;
-export const POST = handle;

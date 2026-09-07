@@ -1,0 +1,6 @@
+.env*
+work/
+tests/
+scripts/
+migrations/
+README.md

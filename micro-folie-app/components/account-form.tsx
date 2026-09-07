@@ -3,6 +3,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { api } from '../lib/http';
+import { sitePath } from '../lib/urls';
 export default function AccountForm({ mode }: { mode: 'activate' | 'reset' }) {
   const [token, setToken] = useState(''),
     [error, setError] = useState(''),
@@ -41,7 +42,7 @@ export default function AccountForm({ mode }: { mode: 'activate' | 'reset' }) {
       } else {
         await api('auth/request-password-reset', {
           email: f.get('email'),
-          redirectTo: window.location.origin + '/admin/mot-de-passe',
+          redirectTo: window.location.origin + sitePath('/admin/mot-de-passe/'),
         });
         setDone(
           'Si un compte correspond et que l’envoi des emails est activé, vous recevrez un lien. Sinon, contactez le responsable du site.',
@@ -89,11 +90,11 @@ export default function AccountForm({ mode }: { mode: 'activate' | 'reset' }) {
             )}
             {mode === 'activate' || token ? (
               <label className="field-label">
-                Mot de passe · 12 caractères minimum
+                Mot de passe · 10 caractères minimum
                 <Input
                   name="password"
                   type="password"
-                  minLength={12}
+                  minLength={10}
                   maxLength={128}
                   required
                   autoComplete="new-password"
@@ -130,7 +131,7 @@ export default function AccountForm({ mode }: { mode: 'activate' | 'reset' }) {
           </form>
         )}
       </section>
-      <a className="text-link" href="/admin">
+      <a className="text-link" href={sitePath('/admin/')}>
         ← Connexion à l’administration
       </a>
     </main>

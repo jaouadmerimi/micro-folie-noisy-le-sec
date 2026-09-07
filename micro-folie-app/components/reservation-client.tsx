@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { api } from '../lib/http';
+import { sitePath } from '../lib/urls';
 import { formatDate } from '../lib/dates';
 const labels: Record<string, string> = {
   pending: 'Demande en attente de confirmation',
@@ -81,7 +82,7 @@ export default function ReservationClient() {
       <p>
         Une question ? <a href="tel:+33149426719">01 49 42 67 19</a>
       </p>
-      <a className="text-link" href="/">
+      <a className="text-link" href={sitePath('/')}>
         ← Retour à la Micro-Folie
       </a>
     </main>

@@ -1,21 +1,24 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from '@better-auth/drizzle-adapter';
-import { drizzle } from 'drizzle-orm/d1';
-import * as schema from '../db/schema';
-import { Service, type Bindings } from './service';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { bearer } from 'better-auth/plugins/bearer';
+import * as schema from './schema.ts';
+import { Service, type Bindings } from './service.ts';
+import { getPool } from './database.ts';
 export function makeAuth(env: Bindings) {
   if (!env.AUTH_SECRET || !env.SITE_URL)
     throw new Error('Authentication configuration missing');
   return betterAuth({
     appName: 'Micro-Folie Noisy-le-Sec',
-    baseURL: env.SITE_URL,
+    baseURL: env.API_URL,
     secret: env.AUTH_SECRET,
-    database: drizzleAdapter(drizzle(env.DB, { schema }), {
-      provider: 'sqlite',
+    database: drizzleAdapter(drizzle(getPool(), { schema }), {
+      provider: 'pg',
       schema,
-      transaction: false,
+      transaction: true,
     }),
-    trustedOrigins: [env.SITE_URL],
+    trustedOrigins: [env.SITE_URL, new URL(env.SITE_URL).origin],
+    plugins: [bearer({ requireSignature: true })],
     emailAndPassword: {
       enabled: true,
       minPasswordLength: 10,
@@ -42,6 +45,7 @@ export function makeAuth(env: Bindings) {
       cookieCache: { enabled: false },
     },
     advanced: {
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
       useSecureCookies: env.SITE_URL.startsWith('https:'),
       defaultCookieAttributes: { sameSite: 'lax', httpOnly: true },
     },
