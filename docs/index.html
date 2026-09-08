@@ -705,7 +705,8 @@ header.site{position:sticky;top:0;z-index:60;background:rgba(251,247,241,.86);ba
 .stats{background:var(--red);color:#fff;}
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;padding:40px 0;}
 .stat{text-align:center;padding:8px;}
-.stat b{display:block;font-family:var(--font-display);font-weight:800;font-size:clamp(2rem,5vw,3rem);letter-spacing:-.02em;line-height:1;}
+.stat b{display:block;font-family:var(--font-display);font-weight:800;font-size:clamp(2rem,5vw,3rem);letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;}
+.stat .stat-readable{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0;}
 .stat span{display:block;margin-top:8px;font-size:.98rem;font-weight:500;opacity:.92;}
 .stat+.stat{border-left:1px solid rgba(255,255,255,.22);}
 
@@ -997,9 +998,9 @@ body.no-anim .hero-art .screen i{animation:none!important;}
 <!-- ============ STATS ============ -->
 <section class="stats">
   <div class="wrap stats-row">
-    <div class="stat reveal"><b>2 000+</b><span>œuvres numérisées</span></div>
-    <div class="stat reveal"><b>7</b><span>espaces à explorer</span></div>
-    <div class="stat reveal"><b>10 000+</b><span>visiteurs accueillis</span></div>
+    <div class="stat reveal"><b data-count-to="2000" data-count-suffix="+">2 000+</b><span>œuvres numérisées</span></div>
+    <div class="stat reveal"><b data-count-to="7">7</b><span>espaces à explorer</span></div>
+    <div class="stat reveal"><b data-count-to="10000" data-count-suffix="+">10 000+</b><span>visiteurs accueillis</span></div>
     <div class="stat reveal"><b>0 €</b><span>toujours gratuit</span></div>
   </div>
 </section>
@@ -1281,4 +1282,4 @@ body.no-anim .hero-art .screen i{animation:none!important;}
 
 
 <!-- ============ TWEAKS (style switcher) ============ -->
-<p style="text-align:center;padding:18px"><a href="/admin">Espace équipe</a></p><script src="/site-config.js"></script><script src="/public-live.js" defer></script></body></html>
+<p style="text-align:center;padding:18px"><a href="/admin">Espace équipe</a></p><script src="/stats-counter.js" defer></script><script src="/site-config.js"></script><script src="/public-live.js" defer></script></body></html>
