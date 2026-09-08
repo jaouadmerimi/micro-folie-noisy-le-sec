@@ -346,7 +346,7 @@ export default function AdminClient() {
   const firstName = user?.name?.split(' ')[0] || 'à vous';
   const pageInfo: Record<string, { title: string; description: string }> = {
     overview: {
-      title: `Bonjour ${firstName}.`,
+      title: data.isOwner ? 'Bienvenue.' : `Bonjour ${firstName}.`,
       description: 'Un coup d’œil sur la vie de votre Micro-Folie.',
     },
     reservations: {

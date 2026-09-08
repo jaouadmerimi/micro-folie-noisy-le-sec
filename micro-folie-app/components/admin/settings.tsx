@@ -194,7 +194,7 @@ export function Settings({
           </header>
           <div className="mf-card-body">
             <div className="mf-member">
-              <span className="mf-avatar">JM</span>
+              <span className="mf-avatar">MF</span>
               <div>
                 <strong>{data.ownerEmail}</strong>
                 <small>Responsable de la Micro-Folie</small>
