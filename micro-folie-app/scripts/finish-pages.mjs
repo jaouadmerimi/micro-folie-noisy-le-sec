@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync, unlinkSync } from 'node:fs';
-const base = '/micro-folie-noisy-le-sec';
-const site = 'https://jaouadmerimi.github.io' + base + '/';
+const base = '';
+const site = 'https://microfolie-noisylesec.github.io/';
 const html = readFileSync('site.html', 'utf8')
   .replace(/<link rel="canonical"[^>]*>/, `<link rel="canonical" href="${site}">`)
   .replaceAll('/assets/', base + '/assets/')

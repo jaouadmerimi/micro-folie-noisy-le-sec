@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { appendFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 const values = {
-  SITE_URL: 'https://jaouadmerimi.github.io/micro-folie-noisy-le-sec',
+  SITE_URL: 'https://microfolie-noisylesec.github.io',
   API_URL: 'https://micro-folie-api.vercel.app',
   ADMIN_EMAIL: 'jaouad.merimi@gmail.com',
   AUTH_SECRET: randomBytes(32).toString('base64url'),

@@ -2,8 +2,9 @@
 
 Site public, agenda, réservations et administration de l’équipe.
 
-- Site : https://jaouadmerimi.github.io/micro-folie-noisy-le-sec/
-- Administration : https://jaouadmerimi.github.io/micro-folie-noisy-le-sec/admin/
+- Site : https://microfolie-noisylesec.github.io/
+- Administration : https://microfolie-noisylesec.github.io/admin/
+- Dépôt : https://github.com/microfolie-noisylesec/microfolie-noisylesec.github.io
 - Serveur : projet `micro-folie-api` sur le compte Vercel `jaouad-merimi`, avec une base Neon dédiée.
 
 L’administration utilise des comptes individuels par email et mot de passe. Les visiteurs réservent sans compte et obtiennent un lien personnel de suivi et d’annulation.

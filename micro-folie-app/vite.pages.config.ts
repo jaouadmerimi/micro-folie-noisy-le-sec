@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 export default defineConfig({
   root: here('./pages'),
-  base: '/micro-folie-noisy-le-sec/',
+  base: '/',
   publicDir: here('./public'),
   resolve: { alias: { '@': here('./') } },
   plugins: [react()],
